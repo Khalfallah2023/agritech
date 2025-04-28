@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,94 +7,72 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  Dimensions
+  Dimensions,
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { PieChart } from 'react-native-chart-kit';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchUserPlants } from '../../redux/reducers/userPlantsReducer';
 
 const GardenInventoryScreen = ({ navigation }) => {
   const nav = useNavigation() || navigation;
   const [activeSort, setActiveSort] = useState('quantity'); // 'quantity', 'name', 'date'
+  const dispatch = useDispatch();
   
-  // Données du jardin (similaire à votre structure existante)
-  const plants = [
-    {
-      id: 1,
-      title: 'Tomato',
-      image: require('../../assets/plante/tomate(2).png'),
-      color: '#5B7553',
-      backgroundColor: '#0D330E',
-      quantity: 12,
-      planted: '12/01/2024'
-    },
-    {
-      id: 2,
-      title: 'Butterhead Lettuce',
-      image: require('../../assets/plante/lettuce.png'),
-      color: '#5B7553',
-      backgroundColor: '#477023',
-      quantity: 8,
-      planted: '05/02/2024'
-    },
-    {
-      id: 3,
-      title: 'Carrot',
-      image: require('../../assets/plante/carrot(1).png'),
-      color: '#5B7553',
-      backgroundColor: '#6E8649',
-      quantity: 20,
-      planted: '20/02/2024'
-    },
-    {
-      id: 4,
-      title: 'Spinach',
-      image: require('../../assets/plante/spinach(2).png'),
-      color: '#5B7553',
-      backgroundColor: '#C1D95C',
-      quantity: 15,
-      planted: '15/03/2024'
-    },
-    {
-      id: 5,
-      title: 'Bell Pepper',
-      image: require('../../assets/plante/carrot(1).png'),
-      color: '#5B7553',
-      backgroundColor: '#80B155',
-      quantity: 6,
-      planted: '01/03/2024'
-    },
-  ];
+  // Get plants data from Redux store
+  const { plants, loading, error } = useSelector(state => state.userPlants);
   
-  // Trier les plantes en fonction de l'option de tri active
+  // Fetch plants when the component mounts
+  useEffect(() => {
+    dispatch(fetchUserPlants());
+  }, [dispatch]);
+  
+  // Format the current date
+  const getCurrentDate = () => {
+    const date = new Date();
+    const options = { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' };
+    return date.toLocaleDateString('en-US', options);
+  };
+  
+  // Handle sorting
   const sortedPlants = [...plants].sort((a, b) => {
     if (activeSort === 'quantity') {
       return b.quantity - a.quantity;
     } else if (activeSort === 'name') {
       return a.title.localeCompare(b.title);
     } else if (activeSort === 'date') {
-      // Convertir les dates dans un format comparable
-      const dateA = new Date(a.planted.split('/').reverse().join('/'));
-      const dateB = new Date(b.planted.split('/').reverse().join('/'));
+      // Convert dates to comparable format
+      const dateA = new Date(a.plantingDate || '2000/01/01');
+      const dateB = new Date(b.plantingDate || '2000/01/01');
       return dateB - dateA;
     }
     return 0;
   });
   
-  // Données pour le graphique
-  const chartData = plants.map((plant, index) => ({
+  // Format the planting date for display
+  const formatPlantingDate = (dateString) => {
+    if (!dateString) return "Not planted yet";
+    const date = new Date(dateString);
+    return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+  };
+  
+  // Data for the pie chart
+  const chartData = plants.map((plant) => ({
     name: plant.title,
     population: plant.quantity,
-    color: plant.backgroundColor,
+    color: plant.backgroundColor || '#477023',
     legendFontColor: '#7F7F7F',
     legendFontSize: 12
   }));
   
-  // Calcul du total des plantes
-  const totalPlants = plants.reduce((sum, plant) => sum + plant.quantity, 0);
+  // Calculate total plants
+  const totalPlants = plants.reduce((sum, plant) => sum + (plant.quantity || 0), 0);
   
-  // Header avec recherche et filtre
+  // Header with search and filter
   const renderHeader = () => (
     <View style={styles.header}>
       <TouchableOpacity style={styles.backButton} onPress={() => nav.goBack()}>
@@ -103,7 +81,7 @@ const GardenInventoryScreen = ({ navigation }) => {
       <View style={styles.titleContainer}>
         <Text style={styles.headerTitleSmall}>Garden</Text>
         <Text style={styles.headerTitleLarge}>Inventory</Text>
-        <Text style={styles.dateText}>Sunday, 01 Dec 2024</Text>
+        <Text style={styles.dateText}>{getCurrentDate()}</Text>
       </View>
       <TouchableOpacity style={styles.filterButton}>
         <Icon name="filter-list" size={24} color="#FFF" />
@@ -111,7 +89,7 @@ const GardenInventoryScreen = ({ navigation }) => {
     </View>
   );
   
-  // Options de tri
+  // Sort options
   const renderSortOptions = () => (
     <View style={styles.sortOptionsContainer}>
       <Text style={styles.sortByText}>Sort by:</Text>
@@ -140,7 +118,7 @@ const GardenInventoryScreen = ({ navigation }) => {
     </View>
   );
   
-  // Carte sommaire
+  // Summary card
   const renderSummaryCard = () => (
     <View style={styles.summaryCard}>
       <View style={styles.summaryHeader}>
@@ -151,67 +129,94 @@ const GardenInventoryScreen = ({ navigation }) => {
         </View>
       </View>
       
-      <View style={styles.chartContainer}>
-        <PieChart
-          data={chartData}
-          width={Dimensions.get('window').width - 80}
-          height={180}
-          chartConfig={{
-            backgroundColor: '#FFFFFF',
-            backgroundGradientFrom: '#FFFFFF',
-            backgroundGradientTo: '#FFFFFF',
-            color: (opacity = 1) => `rgba(71, 112, 35, ${opacity})`,
-          }}
-          accessor="population"
-          backgroundColor="transparent"
-          paddingLeft="15"
-          absolute
-        />
-      </View>
+      {plants.length > 0 ? (
+        <View style={styles.chartContainer}>
+          <PieChart
+            data={chartData}
+            width={Dimensions.get('window').width - 80}
+            height={180}
+            chartConfig={{
+              backgroundColor: '#FFFFFF',
+              backgroundGradientFrom: '#FFFFFF',
+              backgroundGradientTo: '#FFFFFF',
+              color: (opacity = 1) => `rgba(71, 112, 35, ${opacity})`,
+            }}
+            accessor="population"
+            backgroundColor="transparent"
+            paddingLeft="15"
+            absolute
+          />
+        </View>
+      ) : (
+        <View style={styles.emptyChartMessage}>
+          <Text style={styles.emptyText}>No plants data available</Text>
+        </View>
+      )}
     </View>
   );
-  
-  // Rendu d'une carte de plante
-  const renderPlantCard = (plant) => (
-    <TouchableOpacity
-      key={plant.id}
-      style={styles.plantCard}
-      onPress={() => nav.navigate('dashboard', { plantId: plant.id, plantName: plant.title })}
-    >
-      <View style={[styles.plantImageContainer, { backgroundColor: plant.backgroundColor }]}>
-        <Image source={plant.image} style={styles.plantImage} />
-      </View>
-      
-      <View style={styles.plantDetails}>
-        <Text style={styles.plantTitle}>{plant.title}</Text>
-        <Text style={styles.plantedDate}>Planted: {plant.planted}</Text>
-        
-        <View style={styles.quantityIndicatorContainer}>
-          <View style={styles.quantityBar}>
-            <View 
-              style={[
-                styles.quantityFill, 
-                { 
-                  width: `${Math.min(100, (plant.quantity / Math.max(...plants.map(p => p.quantity))) * 100)}%`,
-                  backgroundColor: plant.backgroundColor
-                }
-              ]} 
+  const getPlantImage = (imageName) => {
+    switch(imageName) {
+      case 'tomato(2).png': return require('../../assets/plante/tomate(2).png');
+      case 'lettuce.png': return require('../../assets/plante/lettuce.png');
+      case 'carrot(1).png': return require('../../assets/plante/carrot(1).png');
+      case 'spinach(2).png': return require('../../assets/plante/spinach(2).png');
+      default: return require('../../assets/plante/tomate(2).png');  // image par défaut
+    }
+  };
+  // Plant card
+  const renderPlantCard = (plant) => {
+    // Find the maximum quantity for scaling the bar
+    const maxQuantity = Math.max(...plants.map(p => p.quantity || 1));
+    
+    return (
+      <TouchableOpacity
+        key={plant.id}
+        style={styles.plantCard}
+        onPress={() => nav.navigate('dashboard', { plantId: plant.id, plantName: plant.title })}
+      >
+        <View style={[styles.plantImageContainer, { backgroundColor: plant.backgroundColor || '#477023' }]}>
+          {plant.image ? (
+            <Image 
+              source={ getPlantImage(plant.image) } 
+              style={styles.plantImage}
+              defaultSource={require('../../assets/plante/tomate(2).png')}
             />
-          </View>
-          <View style={styles.quantityTextContainer}>
-            <MaterialCommunityIcons name="seed" size={16} color="#477023" />
-            <Text style={styles.quantityText}>{plant.quantity}</Text>
+          ) : (
+            <Icon name="spa" size={40} color="#FFFFFF" />
+          )}
+        </View>
+        
+        <View style={styles.plantDetails}>
+          <Text style={styles.plantTitle}>{plant.title}</Text>
+          <Text style={styles.plantedDate}>Planted: {formatPlantingDate(plant.plantingDate)}</Text>
+          
+          <View style={styles.quantityIndicatorContainer}>
+            <View style={styles.quantityBar}>
+              <View 
+                style={[
+                  styles.quantityFill, 
+                  { 
+                    width: `${Math.min(100, ((plant.quantity || 1) / maxQuantity) * 100)}%`,
+                    backgroundColor: plant.backgroundColor || '#477023'
+                  }
+                ]} 
+              />
+            </View>
+            <View style={styles.quantityTextContainer}>
+              <MaterialCommunityIcons name="seed" size={16} color="#477023" />
+              <Text style={styles.quantityText}>{plant.quantity || 0}</Text>
+            </View>
           </View>
         </View>
-      </View>
-      
-      <TouchableOpacity style={styles.moreButton}>
-        <Icon name="more-vert" size={24} color="#477023" />
+        
+        <TouchableOpacity style={styles.moreButton}>
+          <Icon name="more-vert" size={24} color="#477023" />
+        </TouchableOpacity>
       </TouchableOpacity>
-    </TouchableOpacity>
-  );
+    );
+  };
   
-  // Navbar
+  // Navigation bar
   const renderNavBar = () => (
     <View style={styles.navbar}>
       <TouchableOpacity style={styles.navItem} onPress={() => nav.navigate('garden')}>
@@ -229,20 +234,63 @@ const GardenInventoryScreen = ({ navigation }) => {
     </View>
   );
   
+  // Show error if there's an issue loading the data
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        {renderHeader()}
+        <View style={styles.errorContainer}>
+          <Icon name="error-outline" size={60} color="#cc0000" />
+          <Text style={styles.errorText}>Error loading plants: {error}</Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={() => dispatch(fetchUserPlants())}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+        {renderNavBar()}
+      </SafeAreaView>
+    );
+  }
+  
   return (
     <SafeAreaView style={styles.container}>
       {renderHeader()}
       
-      <ScrollView style={styles.scrollContent}>
-        {renderSortOptions()}
-        {renderSummaryCard()}
-        
-        <Text style={styles.sectionTitle}>Plants in Your Garden</Text>
-        
-        {sortedPlants.map(renderPlantCard)}
-        
-        <View style={styles.bottomPadding} />
-      </ScrollView>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#477023" />
+          <Text style={styles.loadingText}>Loading your garden...</Text>
+        </View>
+      ) : (
+        <ScrollView style={styles.scrollContent}>
+          {renderSortOptions()}
+          {renderSummaryCard()}
+          
+          <View style={styles.plantListHeader}>
+            <Text style={styles.sectionTitle}>Plants in Your Garden</Text>
+            <Text style={styles.plantCountText}>{plants.length} varieties</Text>
+          </View>
+          
+          {plants.length > 0 ? (
+            sortedPlants.map(renderPlantCard)
+          ) : (
+            <View style={styles.emptyStateContainer}>
+              <Icon name="grass" size={60} color="#477023" opacity={0.5} />
+              <Text style={styles.emptyStateText}>Your garden is empty</Text>
+              <TouchableOpacity 
+                style={styles.addPlantButton}
+                onPress={() => nav.navigate('addPlante')}
+              >
+                <Text style={styles.addPlantButtonText}>Add your first plant</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          
+          <View style={styles.bottomPadding} />
+        </ScrollView>
+      )}
       
       {renderNavBar()}
     </SafeAreaView>
@@ -375,11 +423,20 @@ const styles = StyleSheet.create({
   chartContainer: {
     alignItems: 'center',
   },
+  plantListHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#000',
-    marginBottom: 15,
+  },
+  plantCountText: {
+    color: '#666',
+    fontSize: 14,
   },
   plantCard: {
     flexDirection: 'row',
@@ -473,6 +530,70 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 80,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#477023',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#cc0000',
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 20,
+    backgroundColor: '#477023',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+  },
+  retryButtonText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  emptyStateText: {
+    fontSize: 18,
+    color: '#666',
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  addPlantButton: {
+    backgroundColor: '#477023',
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 25,
+  },
+  addPlantButtonText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  emptyChartMessage: {
+    height: 180,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
   },
 });
 

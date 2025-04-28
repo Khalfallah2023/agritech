@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,104 +9,123 @@ import {
   Image,
   TextInput,
   Alert,
-  Modal,
+  ActivityIndicator,
 } from 'react-native';
+import { plantService } from '../../services/api.service';
 import { useNavigation } from '@react-navigation/native';
+import { useDispatch, useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import * as ImagePicker from 'expo-image-picker';
-
+import { addPlantToUser ,resetLoading ,fetchUserPlants } from '../../redux/reducers/userPlantsReducer';
+import axios from 'axios';
+import { useFocusEffect } from '@react-navigation/native';
 const AddPlantScreen = () => {
-  const nav = useNavigation() || navigation;
+  const nav = useNavigation();
+  const dispatch = useDispatch();
+  
+  // Get the loading and error states from Redux store
+  const { loading, error } = useSelector(state => state.userPlants);
 
-  const [plantName, setPlantName] = useState('');
-  const [plantImage, setPlantImage] = useState(null);
   const [plantingDate, setPlantingDate] = useState('');
-  const [wateringSchedule, setWateringSchedule] = useState('');
-  const [notes, setNotes] = useState('');
   const [selectedPlantType, setSelectedPlantType] = useState(null);
-  const [isAddPlantModalVisible, setIsAddPlantModalVisible] = useState(false);
-  const [newPlantTitle, setNewPlantTitle] = useState('');
-  const [newPlantImage, setNewPlantImage] = useState(null);
-  const [newPlantColor, setNewPlantColor] = useState('#5B7553');
-  const [newPlantBackgroundColor, setNewPlantBackgroundColor] = useState('#6E8649');
-  const [newPlantQuantity, setNewPlantQuantity] = useState('');
   const [quantity, setQuantity] = useState('1');
 
-  // Liste des types de plantes disponibles, transformée en state pour pouvoir l'étendre
-  const [plantTypes, setPlantTypes] = useState([
+  // Liste des types de plantes disponibles
+  const plantTypes = [
     {
-      id: 1,
+      id: '20250428-tomato', // Corrected from 20240428-tomate
       title: 'Tomato',
       image: require('../../assets/plante/tomate(2).png'),
       color: '#5B7553',
       backgroundColor: '#0D330E',
-      quantity: 12
+      quantity: 12,
+      img: 'tomate(2).png',
+      plantingDate:'',
     },
     {
-      id: 2,
+      id: '20250428-butterhead-lett',
       title: 'Butterhead Lettuce',
       image: require('../../assets/plante/lettuce.png'),
       color: '#5B7553',
       backgroundColor: '#477023',
-      quantity: 8
+      quantity: 8,
+      img: 'lettuce.png',
+      plantingDate:'',
     },
     {
-      id: 3,
+      id: '20250428-carrot',
       title: 'Carrot',
       image: require('../../assets/plante/carrot(1).png'),
       color: '#5B7553',
       backgroundColor: '#6E8649',
-      quantity: 20
+      quantity: 20,
+      img: 'carrot(1).png',
+      plantingDate:'',
     },
     {
-      id: 4,
+      id: '20250428-spinach',
       title: 'Spinach',
       image: require('../../assets/plante/spinach(2).png'),
       color: '#5B7553',
       backgroundColor: '#C1D95C',
-      quantity: 15
+      quantity: 15,
+      img: 'spinach(2).png',
+      plantingDate:'',
     },
-  ]);
-
-  // Fonction pour choisir une image depuis la galerie
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      setPlantImage(result.assets[0].uri);
+  ];
+  useFocusEffect(
+    React.useCallback(() => {
+      dispatch(fetchUserPlants());
+    }, [dispatch])
+  );
+  useEffect(() => {
+    let loadingTimeout;
+    
+    
+    if (loading) {
+      loadingTimeout = setTimeout(() => {
+        dispatch(resetLoading());
+        console.log('Loading timeout triggered - resetting state');
+      }, 10000);
     }
-  };
-
-  // Fonction pour choisir une image pour un nouveau type de plante
-  const pickNewPlantTypeImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      setNewPlantImage(result.assets[0].uri);
-    }
-  };
-
+    
+    return () => {
+      if (loadingTimeout) clearTimeout(loadingTimeout);
+    };
+  }, [loading, dispatch]);
   // Fonction pour gérer la sélection d'un type de plante
   const handlePlantTypeSelect = (plant) => {
     setSelectedPlantType(plant);
-    setPlantName(plant.title);
-  };
+    if (!plantingDate) {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      setPlantingDate(`${year}/${day}/${month}`);
+    }
 
+  };
+  const handleDateChange = (text) => {
+    setPlantingDate(text);
+    
+    // If a plant is selected, update its plantingDate property
+    if (selectedPlantType) {
+      // Create a copy of the selected plant to avoid modifying the original
+      const updatedPlant = { 
+        ...selectedPlantType,
+        plantingDate: text 
+      };
+      setSelectedPlantType(updatedPlant);
+    }
+  };
   // Fonction pour augmenter la quantité
   const increaseQuantity = () => {
+    if (!selectedPlantType) return;
     const currentQuantity = parseInt(quantity) || 0;
-    setQuantity((currentQuantity + 1).toString());
-  };
+    if (currentQuantity < selectedPlantType.quantity) {
+      setQuantity((currentQuantity + 1).toString());
+    } else {
+      Alert.alert('Attention', `Stock maximal atteint : ${selectedPlantType.quantity}`);
+    }  };
 
   // Fonction pour diminuer la quantité
   const decreaseQuantity = () => {
@@ -116,101 +135,80 @@ const AddPlantScreen = () => {
     }
   };
 
-  // Fonction pour ajouter un nouveau type de plante
-  const handleAddNewPlantType = () => {
-    if (!newPlantTitle.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer un nom pour le type de plante');
-      return;
+  // Modify the handleAddPlant function:
+const handleAddPlant = () => {
+  if (!selectedPlantType) {
+    Alert.alert('Erreur', 'Veuillez sélectionner un type de plante');
+    return;
+  }
+
+  // Create a proper date - this fixes your date format issue
+  let formattedDate;
+  if (plantingDate) {
+    // Parse the entered date (assuming format is YYYY/DD/MM as shown in your placeholder)
+    const parts = plantingDate.split('/');
+    if (parts.length === 3) {
+      // Rearrange to YYYY-MM-DD for the API
+      formattedDate = `${parts[0]}-${parts[2]}-${parts[1]}`;
+    } else {
+      // Fallback to today if format is incorrect
+      formattedDate = new Date().toISOString().split('T')[0];
     }
-
-    if (!newPlantImage) {
-      Alert.alert('Erreur', 'Veuillez ajouter une image pour le type de plante');
-      return;
-    }
-
-    if (!newPlantQuantity.trim() || isNaN(parseInt(newPlantQuantity)) || parseInt(newPlantQuantity) <= 0) {
-      Alert.alert('Erreur', 'Veuillez entrer une quantité valide');
-      return;
-    }
-
-    // Créer un nouvel ID basé sur le dernier ID existant + 1
-    const newId = Math.max(...plantTypes.map(plant => plant.id)) + 1;
-
-    // Créer un nouveau type de plante
-    const newPlantType = {
-      id: newId,
-      title: newPlantTitle,
-      image: { uri: newPlantImage },
-      color: newPlantColor,
-      backgroundColor: newPlantBackgroundColor,
-      quantity: parseInt(newPlantQuantity)
-    };
-
-    // Ajouter le nouveau type à la liste
-    setPlantTypes([...plantTypes, newPlantType]);
-    
-    // Réinitialiser les champs du formulaire
-    setNewPlantTitle('');
-    setNewPlantImage(null);
-    setNewPlantQuantity('');
-    
-    // Fermer la modal
-    setIsAddPlantModalVisible(false);
-    
-    // Sélectionner automatiquement le nouveau type de plante
-    handlePlantTypeSelect(newPlantType);
-    
-    // Notification de succès
-    Alert.alert('Succès', `Nouveau type de plante '${newPlantTitle}' ajouté avec une quantité de ${newPlantQuantity}!`);
+  } else {
+    // If no date provided, use today
+    formattedDate = new Date().toISOString().split('T')[0];
+  }
+  
+  // Format plant data properly
+  const plantData = {
+    plantId: selectedPlantType.id.toString(),
+    quantity: parseInt(quantity) || 1,
+    plantingDate: formattedDate,
+    imageName: selectedPlantType.img
   };
+  
+  console.log('Sending plant data:', plantData);
+  console.log('Plant ID:', selectedPlantType.id.toString());
 
-  // Fonction pour ajouter une nouvelle plante
-  const handleAddPlant = () => {
-    if (!plantName.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer un nom de plante');
-      return;
-    }
-
-    if (!selectedPlantType) {
-      Alert.alert('Erreur', 'Veuillez sélectionner un type de plante');
-      return;
-    }
-
-    // Dans une application réelle, vous sauvegarderiez ces données dans votre état global ou base de données
-    const newPlant = {
-      id: Date.now(),
-      title: plantName,
-      image: plantImage || selectedPlantType.image,
-      color: selectedPlantType.color,
-      backgroundColor: selectedPlantType.backgroundColor,
-      plantingDate: plantingDate,
-      wateringSchedule: wateringSchedule,
-      notes: notes,
-      quantity: parseInt(quantity) || 1
-    };
-
-    // Notification de succès et redirection
-    Alert.alert(
-      'Succès',
-      `${plantName} a été ajouté à votre jardin avec une quantité de ${quantity} !`,
-      [
-        {
-          text: 'Voir le tableau de bord',
-          onPress: () => nav.navigate('dashboard', { plantId: newPlant.id, plantName: newPlant.title }),
-        },
-        {
-          text: 'Retour au jardin',
-          onPress: () => nav.navigate('garden', { plantId: newPlant.id, plantName: newPlant.title }),
-        },
-      ]
-    );
-  };
-
-  // Couleurs disponibles pour les nouveaux types de plantes
-  const backgroundColorOptions = [
-    '#0D330E', '#477023', '#6E8649', '#C1D95C', '#8FB339', 
-    '#5A8F39', '#39608F', '#395A8F', '#5A398F', '#8F3960'
-  ];
+  dispatch(addPlantToUser(plantData))
+    .then((resultAction) => {
+      // Check if the action was fulfilled
+      if (addPlantToUser.fulfilled.match(resultAction)) {
+        console.log('Success:', resultAction.payload);
+        Alert.alert(
+          'Succès',
+          `${selectedPlantType.title} a été ajouté à votre jardin avec une quantité de ${quantity} !`,
+          [
+            {
+              text: 'Voir le tableau de bord',
+              onPress: async () => {
+                await dispatch(fetchUserPlants()); // Add this line
+                nav.navigate('dashboard', { 
+                  plantId: selectedPlantType.id, 
+                  plantName: selectedPlantType.title 
+                });
+              },
+            },
+            {
+              text: 'Retour au jardin',
+              onPress: async () => {
+                await dispatch(fetchUserPlants());
+                nav.navigate('garden');
+              },
+            },
+          ]
+        );
+      } else {
+        // Handle rejected case that might not trigger the useEffect error handler
+        console.error('Error:', resultAction.error);
+        Alert.alert('Erreur', 'Une erreur est survenue lors de l\'ajout de la plante');
+      }
+    })
+    .catch((error) => {
+      console.error('Exception caught:', error);
+      Alert.alert('Erreur', 'Une erreur inattendue est survenue');
+    });
+};
 
   return (
     <SafeAreaView style={styles.container}>
@@ -227,49 +225,26 @@ const AddPlantScreen = () => {
       </View>
 
       <ScrollView style={styles.scrollContent}>
-        {/* Image de la plante */}
-        <TouchableOpacity style={styles.imageSelector} onPress={pickImage}>
-          {plantImage ? (
-            <Image source={{ uri: plantImage }} style={styles.plantImage} />
-          ) : selectedPlantType ? (
+        {/* Visualisation de la plante sélectionnée */}
+        <View style={styles.imageSelector}>
+          {selectedPlantType ? (
             <Image 
-              source={typeof selectedPlantType.image === 'object' ? selectedPlantType.image : selectedPlantType.image} 
+              source={selectedPlantType.image} 
               style={styles.plantImage} 
             />
           ) : (
             <View style={styles.imagePlaceholder}>
-              <Icon name="add-a-photo" size={40} color="#477023" />
-              <Text style={styles.imagePlaceholderText}>Add Plant Photo</Text>
+              <Icon name="spa" size={40} color="#477023" />
+              <Text style={styles.imagePlaceholderText}>Sélectionnez une plante</Text>
             </View>
           )}
-        </TouchableOpacity>
+        </View>
 
         {/* Formulaire */}
         <View style={styles.formContainer}>
-          {/* Nom de la plante */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Plant Name</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Enter plant name"
-              value={plantName}
-              onChangeText={setPlantName}
-            />
-          </View>
-
           {/* Types de plantes */}
           <View style={styles.inputContainer}>
-            <View style={styles.plantTypeTitleRow}>
-              <Text style={styles.inputLabel}>Plant Type</Text>
-              {/*
-              <TouchableOpacity 
-                style={styles.addPlantTypeButton}
-                onPress={() => setIsAddPlantModalVisible(true)}
-              >
-                <Icon name="add-circle" size={24} color="#477023" />
-                <Text style={styles.addPlantTypeText}>New Type</Text>
-              </TouchableOpacity>*/}
-            </View>
+            <Text style={styles.inputLabel}>Sélectionnez votre plante</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.plantTypeScroll}>
               {plantTypes.map((plant) => (
                 <TouchableOpacity
@@ -282,11 +257,13 @@ const AddPlantScreen = () => {
                   onPress={() => handlePlantTypeSelect(plant)}
                 >
                   <Image 
-                    source={typeof plant.image === 'object' ? plant.image : plant.image} 
+                    source={plant.image} 
                     style={styles.plantTypeImage} 
                   />
                   <Text style={styles.plantTypeTitle}>{plant.title}</Text>
-                  
+                  <View style={styles.plantQuantityBadge}>
+                    <Text style={styles.plantQuantityText}>In stock: {plant.quantity}</Text>
+                  </View>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -294,22 +271,28 @@ const AddPlantScreen = () => {
 
           {/* Quantité */}
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Quantity</Text>
+            <Text style={styles.inputLabel}>Quantité</Text>
             <View style={styles.quantityContainer}>
               <TouchableOpacity style={styles.quantityButton} onPress={decreaseQuantity}>
                 <Icon name="remove" size={24} color="#477023" />
               </TouchableOpacity>
               <TextInput
-                style={styles.quantityInput}
-                keyboardType="numeric"
-                value={quantity}
-                onChangeText={(text) => {
-                  // N'accepter que les nombres
-                  if (/^\d*$/.test(text)) {
+              style={styles.quantityInput}
+              keyboardType="numeric"
+              value={quantity}
+              onChangeText={(text) => {
+                // N'accepter que les chiffres
+                if (/^\d*$/.test(text)) {
+                  const numericValue = parseInt(text) || 0;
+                  if (selectedPlantType && numericValue > selectedPlantType.quantity) {
+                    Alert.alert('Attention', `Quantité maximale : ${selectedPlantType.quantity}`);
+                    setQuantity(selectedPlantType.quantity.toString());
+                  } else {
                     setQuantity(text);
                   }
-                }}
-              />
+                }
+              }}
+            />
               <TouchableOpacity style={styles.quantityButton} onPress={increaseQuantity}>
                 <Icon name="add" size={24} color="#477023" />
               </TouchableOpacity>
@@ -318,122 +301,37 @@ const AddPlantScreen = () => {
 
           {/* Date de plantation */}
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Planting Date</Text>
+            <Text style={styles.inputLabel}>Date de plantation</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="DD/MM/YYYY"
+              placeholder="YYYY/DD/MM"
               value={plantingDate}
-              onChangeText={setPlantingDate}
-            />
-          </View>
-
-          {/* Programme d'arrosage */}
-          
-          {/* Notes */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Notes</Text>
-            <TextInput
-              style={[styles.textInput, styles.textAreaInput]}
-              placeholder="Add any special care instructions or notes"
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-              numberOfLines={4}
+              onChangeText={handleDateChange}
             />
           </View>
         </View>
 
         {/* Bouton d'ajout */}
-        <TouchableOpacity style={styles.addButton} onPress={handleAddPlant}>
-          <Text style={styles.addButtonText}>Add to My Garden</Text>
-          <Icon name="spa" size={24} color="#FFF" />
+                  <TouchableOpacity 
+            style={[
+              styles.addButton,
+              (!selectedPlantType || loading) && styles.disabledButton
+            ]} 
+            onPress={handleAddPlant}
+            disabled={loading || !selectedPlantType}
+          >
+          {loading ? (
+            <ActivityIndicator size="small" color="#FFF" />
+          ) : (
+            <>
+              <Text style={styles.addButtonText}>Ajouter au jardin</Text>
+              <Icon name="spa" size={24} color="#FFF" />
+            </>
+          )}
         </TouchableOpacity>
 
         <View style={styles.bottomPadding} />
       </ScrollView>
-
-      {/* Modal pour ajouter un nouveau type de plante */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isAddPlantModalVisible}
-        onRequestClose={() => setIsAddPlantModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add New Plant Type</Text>
-              <TouchableOpacity onPress={() => setIsAddPlantModalVisible(false)}>
-                <Icon name="close" size={24} color="#000" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Image du nouveau type de plante */}
-            <TouchableOpacity style={styles.imageSelector} onPress={pickNewPlantTypeImage}>
-              {newPlantImage ? (
-                <Image source={{ uri: newPlantImage }} style={styles.plantImage} />
-              ) : (
-                <View style={styles.imagePlaceholder}>
-                  <Icon name="add-a-photo" size={40} color="#477023" />
-                  <Text style={styles.imagePlaceholderText}>Add Type Photo</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-
-            {/* Nom du nouveau type de plante */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Plant Type Name</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Enter plant type name"
-                value={newPlantTitle}
-                onChangeText={setNewPlantTitle}
-              />
-            </View>
-
-            {/* Quantité initiale */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Initial Quantity</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Enter initial quantity"
-                value={newPlantQuantity}
-                onChangeText={(text) => {
-                  // N'accepter que les nombres
-                  if (/^\d*$/.test(text)) {
-                    setNewPlantQuantity(text);
-                  }
-                }}
-                keyboardType="numeric"
-              />
-            </View>
-
-            {/* Sélection de couleur */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Background Color</Text>
-              <View style={styles.colorOptions}>
-                {backgroundColorOptions.map((color, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.colorOption,
-                      { backgroundColor: color },
-                      newPlantBackgroundColor === color && styles.selectedColorOption,
-                    ]}
-                    onPress={() => setNewPlantBackgroundColor(color)}
-                  />
-                ))}
-              </View>
-            </View>
-
-            {/* Bouton d'ajout du nouveau type */}
-            <TouchableOpacity style={styles.addButton} onPress={handleAddNewPlantType}>
-              <Text style={styles.addButtonText}>Add New Plant Type</Text>
-              <Icon name="add-circle" size={24} color="#FFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
       {/* Navigation Bar */}
       <View style={styles.navbar}>
@@ -444,12 +342,10 @@ const AddPlantScreen = () => {
         <TouchableOpacity style={[styles.navItem, styles.activeNavItem]}>
           <Icon name="local-florist" size={28} color="#008003" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity style={styles.navItem} onPress={() => nav.navigate('gardenInventoryScreen')}>
           <Icon name="spa" size={28} color="#000" />
         </TouchableOpacity>
-        
-        
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity style={styles.navItem}  onPress={() => nav.navigate('profile')}>
           <Icon name="account-circle" size={28} color="#000" />
         </TouchableOpacity>
       </View>
@@ -504,7 +400,7 @@ const styles = StyleSheet.create({
     width: 150,
     height: 150,
     borderRadius: 75,
-    resizeMode: 'cover',
+    resizeMode: 'contain',
   },
   imagePlaceholder: {
     width: 150,
@@ -521,6 +417,7 @@ const styles = StyleSheet.create({
     color: '#477023',
     marginTop: 5,
     fontWeight: '500',
+    textAlign: 'center',
   },
   formContainer: {
     backgroundColor: '#FFF',
@@ -553,30 +450,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E0E0E0',
   },
-  textAreaInput: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  plantTypeTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  addPlantTypeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    padding: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#477023',
-  },
-  addPlantTypeText: {
-    color: '#477023',
-    fontWeight: 'bold',
-    marginLeft: 5,
-  },
   plantTypeScroll: {
     flexDirection: 'row',
     marginBottom: 10,
@@ -604,7 +477,7 @@ const styles = StyleSheet.create({
   plantTypeTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#FFF',
     textAlign: 'center',
   },
   plantQuantityBadge: {
@@ -643,32 +516,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     padding: 10,
   },
-  wateringOptions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  wateringOption: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 10,
-    padding: 10,
-    marginHorizontal: 5,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  selectedWateringOption: {
-    backgroundColor: '#477023',
-    borderColor: '#477023',
-  },
-  wateringOptionText: {
-    fontSize: 12,
-    color: '#477023',
-    marginTop: 5,
-  },
-  selectedOptionText: {
-    color: '#FFFFFF',
-  },
   addButton: {
     backgroundColor: '#477023',
     borderRadius: 15,
@@ -677,6 +524,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
+  },
+  disabledButton: {
+    backgroundColor: '#A0A0A0',
   },
   addButtonText: {
     color: '#FFFFFF',
@@ -705,55 +555,6 @@ const styles = StyleSheet.create({
   },
   activeNavItem: {
     backgroundColor: 'rgba(0, 0, 0, 0.05)',
-  },
-  // Styles pour la modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    width: '90%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#477023',
-  },
-  colorOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  colorOption: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginBottom: 10,
-    marginHorizontal: 5,
-  },
-  selectedColorOption: {
-    borderWidth: 3,
-    borderColor: '#FFDE59',
   },
 });
 

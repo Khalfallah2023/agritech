@@ -41,7 +41,7 @@ const PlantMetricsOverlay = ({ visible, plant }) => {
       name: 'Temperature',
       value: '25°C', 
       status: 'Optimal',
-      position: { top: 0, right: 120 },
+      position: { top: -60, right: 210 },
       gradient: ['#FF8A65', '#FF5722'],
       details: 'Current temperature is in the optimal range for healthy growth.'
     },
@@ -51,7 +51,7 @@ const PlantMetricsOverlay = ({ visible, plant }) => {
       name: 'Humidity',
       value: '65%', 
       status: 'Good',
-      position: { top: 20, left: 120 },
+      position: { top: -60, left: 210 },
       gradient: ['#64B5F6', '#1E88E5'],
       details: 'Humidity levels are good. Maintain these levels for optimal leaf development.'
     },
@@ -61,7 +61,7 @@ const PlantMetricsOverlay = ({ visible, plant }) => {
       name: 'pH Level',
       value: 'pH 6.5', 
       status: 'Optimal',
-      position: { bottom: 0, left: 120 },
+      position: { bottom: 10, left: 10 },
       gradient: ['#BA68C8', '#7B1FA2'],
       details: 'Soil pH is in the ideal range for nutrient absorption.'
     },
@@ -71,7 +71,7 @@ const PlantMetricsOverlay = ({ visible, plant }) => {
       name: 'Nutrients',
       value: 'Good', 
       status: 'Sufficient',
-      position: { bottom: 20, right: 120 },
+      position: { bottom: 10, right: 10 },
       gradient: ['#AED581', '#689F38'],
       details: 'Nutrient levels are sufficient. Consider fertilizing in 2 weeks.'
     }

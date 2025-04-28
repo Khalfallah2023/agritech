@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,101 +8,151 @@ import {
   ScrollView,
   Image,
   Dimensions,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { LineChart, BarChart, PieChart, ProgressChart, ContributionGraph } from 'react-native-chart-kit';
+import { LineChart, BarChart } from 'react-native-chart-kit';
+
+import { plantMetricService } from '../../services/api.service'; 
+// Update this with your API URL
 
 const PlantDashboard = ({ navigation }) => {
   const nav = useNavigation() || navigation;
   const route = useRoute();
-  const { plantId, plantName } = route.params || { plantId: 1, plantName: 'Tomato' };
+  const { plantId, plantName, plantImage } = route.params || { 
+    plantId: null, 
+    plantName: '',
+    plantImage: ''
+  };
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [plantData, setPlantData] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Fetch plant data from backend
+  const fetchPlantData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
   
-  // Données fictives pour la plante sélectionnée
-  const plantData = {
-    tomato: {
-      id: 1,
-      name: 'Tomato',
-      image: require('../../assets/plante/tomate(2).png'),
-      soilData: {
-        ph: 6.2,
-        temperature: 24,
-        humidity: 65,
-        nutrients: {
-          nitrogen: 65,
-          potassium: 82,
-          calcium: 70,
-          phosphorus: 55,
-        },
-        pressure: '1013 hPa',
-        airQuality: 'Good',
-        windSpeed: '5 km/h',
-      },
-      temperatureHistory: [22, 23, 24, 25, 24, 23, 24],
-      phHistory: [6.0, 6.1, 6.3, 6.2, 6.4, 6.2, 6.3],
-      humidityHistory: [60, 62, 65, 68, 64, 63, 65],
-      growthPhase: 'Phase 2: Flowering',
-      growthProgress: 45,
-      plantingDate: '15 Jan 2025',
-      expectedHarvest: '10 Apr 2025',
-      wateringSchedule: 'Every 2 days',
-      lastWatered: '01 Mar 2025',
+      if (!plantId) {
+        throw new Error('Plant ID not provided');
+      }
+  
+      // Use the correct service method that matches your backend
+      const response = await plantMetricService.getPlantDashboard(plantId);
+      setPlantData(response.data);
+    } catch (err) {
+      console.error('Error fetching plant data:', err);
+      setError(err.message || 'Failed to load plant data');
+      Alert.alert('Error', 'Failed to load plant data. Please try again.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
-  
-  // Obtenir les données de la plante sélectionnée (pour l'instant juste tomate)
-  const plantInfo = plantData.tomato;
-  
-  // Données pour le graphique de température
+  useEffect(() => {
+    fetchPlantData();
+  }, [plantId]);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchPlantData();
+  };
+
+  // Function to get plant image
+  const getPlantImage = (imageName) => {
+    switch(imageName) {
+      case 'tomato(2).png': return require('../../assets/plante/tomate(2).png');
+      case 'tomate(2).png': return require('../../assets/plante/tomate(2).png');
+      case 'lettuce.png': return require('../../assets/plante/lettuce.png');
+      case 'carrot(1).png': return require('../../assets/plante/carrot(1).png');
+      case 'spinach(2).png': return require('../../assets/plante/spinach(2).png');
+      default: return require('../../assets/plante/tomate(2).png');
+    }
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#477023" />
+        <Text style={styles.loadingText}>Loading plant data...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !plantData) {
+    return (
+      <SafeAreaView style={styles.errorContainer}>
+        <Icon name="error-outline" size={40} color="#e74c3c" />
+        <Text style={styles.errorText}>{error || 'Failed to load plant data'}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchPlantData}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  // Extract data from response
+  const { plant, currentMetrics, historicalData } = plantData;
+  console.log('API Response for plants:', currentMetrics);
+  console.log('API Response for plants:', historicalData );
+  console.log('API Response for plants:', plant);
+  // Format data for charts
   const temperatureData = {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+    labels: historicalData.labels,
     datasets: [
       {
-        data: plantInfo.temperatureHistory,
+        data: historicalData.temperatureHistory,
         color: (opacity = 1) => `rgba(255, 165, 0, ${opacity})`,
         strokeWidth: 2,
       },
     ],
   };
-  
-  // Données pour le graphique de pH
+
   const phData = {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+    labels: historicalData.labels,
     datasets: [
       {
-        data: plantInfo.phHistory,
+        data: historicalData.phHistory,
         color: (opacity = 1) => `rgba(75, 192, 192, ${opacity})`,
         strokeWidth: 2,
       },
     ],
   };
-  
-  // Données pour le graphique des nutriments
-  const nutrientsData = {
-    labels: ['N', 'K', 'Ca', 'P'],
-    datasets: [
-      {
-        data: [
-          plantInfo.soilData.nutrients.nitrogen,
-          plantInfo.soilData.nutrients.potassium,
-          plantInfo.soilData.nutrients.calcium,
-          plantInfo.soilData.nutrients.phosphorus,
-        ],
-      },
-    ],
-  };
-  // Données pour le graphique d'humidité
+
   const humidityData = {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+    labels: historicalData.labels,
     datasets: [
       {
-        data: plantInfo.humidityHistory,
+        data: historicalData.humidityHistory,
         color: (opacity = 1) => `rgba(52, 152, 219, ${opacity})`,
         strokeWidth: 2,
       },
     ],
   };
-  
+
+  const nutrientsData = {
+    labels: ['N', 'K', 'Ca', 'P'],
+    datasets: [
+      {
+        data: [
+          currentMetrics.nitrogen,
+          currentMetrics.potassium,
+          currentMetrics.calcium,
+          currentMetrics.phosphorus,
+        ],
+      },
+    ],
+  };
+
+  // Format dates
+  const plantingDateFormatted = plant.plantingDate ? new Date(plant.plantingDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Not set';
+  const harvestDateFormatted = plant.expectedHarvest ? new Date(plant.expectedHarvest).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Not set';
+  const lastWateredFormatted = plant.lastWatered ? new Date(plant.lastWatered).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Not recorded';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -112,21 +162,21 @@ const PlantDashboard = ({ navigation }) => {
           <Icon name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <View style={styles.titleContainer}>
-          <Text style={styles.headerTitleSmall}>{plantName}</Text>
+          <Text style={styles.headerTitleSmall}>{plant.title}</Text>
           <Text style={styles.headerTitleLarge}>Dashboard</Text>
         </View>
-        <TouchableOpacity style={styles.settingsButton}>
-          <Icon name="settings" size={24} color="#FFFFFF" />
+        <TouchableOpacity style={styles.settingsButton} onPress={handleRefresh}>
+          <Icon name="refresh" size={24} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
       
       <ScrollView style={styles.scrollContent}>
         {/* Plant Image and Basic Info */}
         <View style={styles.plantHeader}>
-          <Image source={plantInfo.image} style={styles.plantImage} />
+          <Image source={getPlantImage(plant.image)} style={styles.plantImage} />
           <View style={styles.plantBasicInfo}>
-            <Text style={styles.plantDate}>Planted: {plantInfo.plantingDate}</Text>
-            <Text style={styles.plantDate}>Expected harvest: {plantInfo.expectedHarvest}</Text>
+            <Text style={styles.plantDate}>Planted: {plantingDateFormatted}</Text>
+            <Text style={styles.plantDate}>Expected harvest: {harvestDateFormatted}</Text>
           </View>
         </View>
         
@@ -139,7 +189,7 @@ const PlantDashboard = ({ navigation }) => {
           
           {/* pH Meter */}
           <View style={styles.phContainer}>
-            <Text style={styles.phTitle}>Current pH: {plantInfo.soilData.ph}</Text>
+            <Text style={styles.phTitle}>Current pH: {currentMetrics.ph}</Text>
             <View style={styles.phScale}>
               <View style={styles.phScaleLine}>
                 {[...Array(14)].map((_, index) => (
@@ -147,7 +197,7 @@ const PlantDashboard = ({ navigation }) => {
                     key={index} 
                     style={[
                       styles.phMarker, 
-                      index === Math.round(plantInfo.soilData.ph) && styles.phMarkerCurrent
+                      index === Math.round(currentMetrics.ph) && styles.phMarkerCurrent
                     ]}
                   />
                 ))}
@@ -162,7 +212,7 @@ const PlantDashboard = ({ navigation }) => {
           
           {/* pH History Chart */}
           <View style={styles.chartContainer}>
-            <Text style={styles.chartTitle}>pH Trend (Last 7 Months)</Text>
+            <Text style={styles.chartTitle}>pH Trend (Last {historicalData.labels.length} Months)</Text>
             <LineChart
               data={phData}
               width={Dimensions.get('window').width - 60}
@@ -175,9 +225,7 @@ const PlantDashboard = ({ navigation }) => {
                 decimalPlaces: 1,
                 color: (opacity = 1) => `rgba(75, 192, 192, ${opacity})`,
                 labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                style: {
-                  borderRadius: 16,
-                },
+                style: { borderRadius: 16 },
                 propsForDots: {
                   r: '6',
                   strokeWidth: '2',
@@ -204,7 +252,7 @@ const PlantDashboard = ({ navigation }) => {
           <View style={styles.temperatureContainer}>
             <View style={styles.temperatureHeader}>
               <Text style={styles.temperatureTitle}>Current Temperature</Text>
-              <Text style={styles.temperatureValue}>{plantInfo.soilData.temperature}°C</Text>
+              <Text style={styles.temperatureValue}>{currentMetrics.temperature}°C</Text>
             </View>
             
             <View style={styles.temperatureInfo}>
@@ -225,7 +273,7 @@ const PlantDashboard = ({ navigation }) => {
           
           {/* Temperature History Chart */}
           <View style={styles.chartContainer}>
-            <Text style={styles.chartTitle}>Temperature Trend (Last 7 Months)</Text>
+            <Text style={styles.chartTitle}>Temperature Trend (Last {historicalData.labels.length} Months)</Text>
             <LineChart
               data={temperatureData}
               width={Dimensions.get('window').width - 60}
@@ -238,9 +286,7 @@ const PlantDashboard = ({ navigation }) => {
                 decimalPlaces: 0,
                 color: (opacity = 1) => `rgba(255, 165, 0, ${opacity})`,
                 labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                style: {
-                  borderRadius: 16,
-                },
+                style: { borderRadius: 16 },
                 propsForDots: {
                   r: '6',
                   strokeWidth: '2',
@@ -255,8 +301,9 @@ const PlantDashboard = ({ navigation }) => {
             />
           </View>
         </View>
-         {/* 3. Soil Humidity - NOUVELLE SECTION */}
-         <View style={styles.sectionContainer}>
+        
+        {/* 3. Soil Humidity */}
+        <View style={styles.sectionContainer}>
           <View style={styles.sectionHeader}>
             <Icon name="water-drop" size={24} color="#477023" />
             <Text style={styles.sectionTitle}>Soil Humidity</Text>
@@ -266,7 +313,7 @@ const PlantDashboard = ({ navigation }) => {
           <View style={styles.humidityContainer}>
             <View style={styles.humidityHeader}>
               <Text style={styles.humidityTitle}>Current Humidity</Text>
-              <Text style={styles.humidityValue}>{plantInfo.soilData.humidity}%</Text>
+              <Text style={styles.humidityValue}>{currentMetrics.humidity}%</Text>
             </View>
             
             <View style={styles.humidityInfo}>
@@ -288,11 +335,11 @@ const PlantDashboard = ({ navigation }) => {
             <View style={styles.wateringInfo}>
               <View style={styles.wateringItem}>
                 <Icon name="schedule" size={20} color="#477023" />
-                <Text style={styles.wateringText}>Schedule: {plantInfo.wateringSchedule}</Text>
+                <Text style={styles.wateringText}>Schedule: {plant.wateringSchedule}</Text>
               </View>
               <View style={styles.wateringItem}>
                 <Icon name="update" size={20} color="#477023" />
-                <Text style={styles.wateringText}>Last watered: {plantInfo.lastWatered}</Text>
+                <Text style={styles.wateringText}>Last watered: {lastWateredFormatted}</Text>
               </View>
             </View>
           </View>
@@ -303,7 +350,7 @@ const PlantDashboard = ({ navigation }) => {
               <View 
                 style={[
                   styles.humidityGaugeFill, 
-                  { width: `${plantInfo.soilData.humidity}%` }
+                  { width: `${currentMetrics.humidity}%` }
                 ]} 
               />
             </View>
@@ -316,7 +363,7 @@ const PlantDashboard = ({ navigation }) => {
           
           {/* Humidity History Chart */}
           <View style={styles.chartContainer}>
-            <Text style={styles.chartTitle}>Humidity Trend (Last 7 Months)</Text>
+            <Text style={styles.chartTitle}>Humidity Trend (Last {historicalData.labels.length} Months)</Text>
             <LineChart
               data={humidityData}
               width={Dimensions.get('window').width - 60}
@@ -329,9 +376,7 @@ const PlantDashboard = ({ navigation }) => {
                 decimalPlaces: 0,
                 color: (opacity = 1) => `rgba(52, 152, 219, ${opacity})`,
                 labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                style: {
-                  borderRadius: 16,
-                },
+                style: { borderRadius: 16 },
                 propsForDots: {
                   r: '6',
                   strokeWidth: '2',
@@ -346,6 +391,7 @@ const PlantDashboard = ({ navigation }) => {
             />
           </View>
         </View>
+        
         {/* 4. Soil Nutrients */}
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeader}>
@@ -368,9 +414,7 @@ const PlantDashboard = ({ navigation }) => {
                 decimalPlaces: 0,
                 color: (opacity = 1) => `rgba(71, 112, 35, ${opacity})`,
                 labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                style: {
-                  borderRadius: 16,
-                },
+                style: { borderRadius: 16 },
               }}
               style={{
                 marginVertical: 8,
@@ -400,22 +444,22 @@ const PlantDashboard = ({ navigation }) => {
             <View style={styles.nutrientCards}>
               <View style={styles.nutrientCard}>
                 <Text style={styles.nutrientCardTitle}>Nitrogen (N)</Text>
-                <Text style={styles.nutrientCardValue}>{plantInfo.soilData.nutrients.nitrogen}%</Text>
+                <Text style={styles.nutrientCardValue}>{currentMetrics.nitrogen}%</Text>
                 <Text style={styles.nutrientCardDesc}>Essential for leaf growth</Text>
               </View>
               <View style={styles.nutrientCard}>
                 <Text style={styles.nutrientCardTitle}>Potassium (K)</Text>
-                <Text style={styles.nutrientCardValue}>{plantInfo.soilData.nutrients.potassium}%</Text>
+                <Text style={styles.nutrientCardValue}>{currentMetrics.potassium}%</Text>
                 <Text style={styles.nutrientCardDesc}>Improves fruit quality</Text>
               </View>
               <View style={styles.nutrientCard}>
                 <Text style={styles.nutrientCardTitle}>Calcium (Ca)</Text>
-                <Text style={styles.nutrientCardValue}>{plantInfo.soilData.nutrients.calcium}%</Text>
+                <Text style={styles.nutrientCardValue}>{currentMetrics.calcium}%</Text>
                 <Text style={styles.nutrientCardDesc}>Prevents blossom end rot</Text>
               </View>
               <View style={styles.nutrientCard}>
                 <Text style={styles.nutrientCardTitle}>Phosphorus (P)</Text>
-                <Text style={styles.nutrientCardValue}>{plantInfo.soilData.nutrients.phosphorus}%</Text>
+                <Text style={styles.nutrientCardValue}>{currentMetrics.phosphorus}%</Text>
                 <Text style={styles.nutrientCardDesc}>Supports root development</Text>
               </View>
             </View>
@@ -425,15 +469,15 @@ const PlantDashboard = ({ navigation }) => {
           <View style={styles.envIndicators}>
             <View style={styles.indicatorItem}>
               <Icon name="compress" size={24} color="#477023" />
-              <Text style={styles.indicatorText}>Pressure: {plantInfo.soilData.pressure}</Text>
+              <Text style={styles.indicatorText}>Pressure: {currentMetrics.pressure}</Text>
             </View>
             <View style={styles.indicatorItem}>
               <Icon name="air" size={24} color="#477023" />
-              <Text style={styles.indicatorText}>Air Quality: {plantInfo.soilData.airQuality}</Text>
+              <Text style={styles.indicatorText}>Air Quality: {currentMetrics.airQuality}</Text>
             </View>
             <View style={styles.indicatorItem}>
               <Icon name="air" size={24} color="#477023" />
-              <Text style={styles.indicatorText}>Wind: {plantInfo.soilData.windSpeed}</Text>
+              <Text style={styles.indicatorText}>Wind: {currentMetrics.windSpeed}</Text>
             </View>
           </View>
         </View>
@@ -446,42 +490,43 @@ const PlantDashboard = ({ navigation }) => {
           </View>
           
           <View style={styles.growthContainer}>
-            <Text style={styles.growthPhase}>{plantInfo.growthPhase}</Text>
+            <Text style={styles.growthPhase}>{plant.growthPhase}</Text>
             
             {/* Growth Progress Bar */}
             <View style={styles.growthProgressContainer}>
               <Text style={styles.growthProgressTitle}>Total Progress</Text>
               <View style={styles.growthProgressBarContainer}>
                 <View 
-                  style={[styles.growthProgressBar, { width: `${plantInfo.growthProgress}%` }]} 
+                  style={[styles.growthProgressBar, { width: `${plant.growthProgress}%` }]} 
                 />
               </View>
-              <Text style={styles.growthProgressValue}>{plantInfo.growthProgress}%</Text>
+              <Text style={styles.growthProgressValue}>{plant.growthProgress}%</Text>
             </View>
             
             {/* Growth Phases */}
             <View style={styles.growthPhases}>
-              <View style={[styles.phaseItem, styles.phaseItemActive]}>
+              <View style={[styles.phaseItem, plant.growthPhase.includes('Seedling') ? styles.phaseItemActive : null]}>
                 <View style={styles.phaseIcon}>
                   <Icon name="filter-1" size={20} color="#FFFFFF" />
                 </View>
                 <Text style={styles.phaseText}>Seedling</Text>
               </View>
-              <View style={[styles.phaseItem, styles.phaseItemActive]}>
+              <View style={[styles.phaseItem, plant.growthPhase.includes('Flowering') ? styles.phaseItemActive : null]}>
                 <View style={styles.phaseIcon}>
                   <Icon name="filter-2" size={20} color="#FFFFFF" />
                 </View>
                 <Text style={styles.phaseText}>Flowering</Text>
               </View>
-              <View style={styles.phaseItem}>
-                <View style={[styles.phaseIcon, styles.phaseIconInactive]}>
-                  <Icon name="filter-3" size={20} color="#477023" />
+      
+              <View style={[styles.phaseItem, plant.growthPhase.includes('Fruiting') ? styles.phaseItemActive : null]}>
+                <View style={[styles.phaseIcon, !plant.growthPhase.includes('Fruiting') && styles.phaseIconInactive]}>
+                  <Icon name="filter-3" size={20} color={plant.growthPhase.includes('Fruiting') ? "#FFFFFF" : "#477023"} />
                 </View>
                 <Text style={styles.phaseText}>Fruiting</Text>
               </View>
-              <View style={styles.phaseItem}>
-                <View style={[styles.phaseIcon, styles.phaseIconInactive]}>
-                  <Icon name="filter-4" size={20} color="#477023" />
+              <View style={[styles.phaseItem, plant.growthPhase.includes('Harvest') ? styles.phaseItemActive : null]}>
+                <View style={[styles.phaseIcon, !plant.growthPhase.includes('Harvest') && styles.phaseIconInactive]}>
+                  <Icon name="filter-4" size={20} color={plant.growthPhase.includes('Harvest') ? "#FFFFFF" : "#477023"} />
                 </View>
                 <Text style={styles.phaseText}>Harvest</Text>
               </View>
@@ -494,27 +539,71 @@ const PlantDashboard = ({ navigation }) => {
       
       {/* Bottom Navigation Bar */}
       <View style={styles.navbar}>
-        <TouchableOpacity style={styles.navItem}>
-          <Icon name="home" size={28} color="#000" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Icon name="local-florist" size={28} color="#000" />
-        </TouchableOpacity>
         <TouchableOpacity style={[styles.navItem, styles.activeNavItem]}>
-          <Icon name="spa" size={28} color="#FFDE59" />
+          <Icon name="home" size={28} color="#477023" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Icon name="insert-chart" size={28} color="#000" />
+        <TouchableOpacity 
+          style={styles.navItem} 
+          onPress={() => nav.navigate('addPlante')}
+        >
+          <Icon name="local-florist" size={28} color="#555" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Icon name="account-circle" size={28} color="#000" />
+        <TouchableOpacity 
+          style={styles.navItem}
+          onPress={() => nav.navigate('gardenInventoryScreen')}
+        >
+          <Icon name="spa" size={28} color="#555" />
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.navItem}
+          onPress={() => nav.navigate('profile')}
+        >
+          <Icon name="account-circle" size={28} color="#555" />
         </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 };
 
+// Make sure to add the loading and error styles
 const styles = StyleSheet.create({
+  // Add these new styles
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F8F2',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#477023',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F8F2',
+    padding: 20,
+  },
+  errorText: {
+    marginTop: 15,
+    fontSize: 16,
+    color: '#e74c3c',
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 30,
+    backgroundColor: '#477023',
+    borderRadius: 25,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   container: {
     flex: 1,
     backgroundColor: '#E8FFDB',
